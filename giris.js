@@ -146,44 +146,51 @@ async function logVisit() {
 }
 
 /**
- * İndirme İşlemlerini Takip Eder
+ * İndirme İşlemlerini Takip Eder (Event Delegation)
  */
 function setupDownloadLogs() {
-  // Hem data-download-log niteliği olanları hem de dosya uzantılı linkleri yakala
-  const downloadLinks = document.querySelectorAll("a[href$='.zip'], a[href$='.exe'], a[href$='.rar'], [data-download-log]");
-  
-  downloadLinks.forEach(link => {
-    // Olay dinleyicisini sadece bir kez eklemek için kontrol
-    if (link.dataset.logAttached) return;
-    link.dataset.logAttached = "true";
+  document.addEventListener("click", async (e) => {
+    // Tıklanan eleman veya ebeveynlerinden biri link mi?
+    const link = e.target.closest("a");
+    if (!link) return;
+
+    // Link bir indirme linki mi?
+    const href = link.getAttribute("href") || "";
+    const isDownload = 
+      href.endsWith(".zip") || 
+      href.endsWith(".exe") || 
+      href.endsWith(".rar") || 
+      href.endsWith(".msi") ||
+      link.hasAttribute("download") ||
+      link.hasAttribute("data-download-log");
+
+    if (!isDownload) return;
+
+    // Bilgilerin güncel olduğundan emin ol
+    await fetchClientInfo();
     
-    link.addEventListener("click", async () => {
-      // Bilgilerin güncel olduğundan emin ol
-      await fetchClientInfo();
-      
-      const fileName = link.getAttribute("href") || link.getAttribute("data-file") || "Bilinmiyor";
-      const fileType = fileName.split('.').pop().toUpperCase();
-      
-      const payload = {
-        username: "Log Sistemi",
-        avatar_url: "https://cdn-icons-png.flaticon.com/512/2991/2991148.png",
-        embeds: [
-          {
-            title: "⬇️ Yeni Dosya İndirme",
-            description: `Kullanıcı bir dosya indirme işlemi başlattı.`,
-            color: 0x57f287, // Green
-            fields: buildCommonFields([
-              { name: "📂 Dosya", value: `\`${fileName}\``, inline: false },
-              { name: "Türü", value: fileType, inline: true }
-            ]),
-            footer: { text: "VRCPlugin Log Sistemi • İndirme Takibi" },
-            timestamp: new Date().toISOString()
-          }
-        ]
-      };
-      
-      sendToDiscord(payload);
-    });
+    const fileName = href || link.getAttribute("data-file") || "Bilinmiyor";
+    const fileType = fileName.split('.').length > 1 ? fileName.split('.').pop().toUpperCase() : "DOSYA";
+    
+    const payload = {
+      username: "Log Sistemi",
+      avatar_url: "https://cdn-icons-png.flaticon.com/512/2991/2991148.png",
+      embeds: [
+        {
+          title: "⬇️ Yeni Dosya İndirme",
+          description: `Kullanıcı bir dosya indirme işlemi başlattı.`,
+          color: 0x57f287, // Green
+          fields: buildCommonFields([
+            { name: "📂 Dosya", value: `\`${fileName}\``, inline: false },
+            { name: "Türü", value: fileType, inline: true }
+          ]),
+          footer: { text: "VRCPlugin Log Sistemi • İndirme Takibi" },
+          timestamp: new Date().toISOString()
+        }
+      ]
+    };
+    
+    sendToDiscord(payload);
   });
 }
 
@@ -191,13 +198,10 @@ function setupDownloadLogs() {
 window.addEventListener("load", () => {
   // IP bilgisini arka planda çekmeye başla
   fetchClientInfo().then(() => {
-    // Bilgi geldikten sonra log at (veya beklemeden atılabilir ama bilgi eksik olur)
+    // Bilgi geldikten sonra log at
     logVisit();
   });
   
-  // İndirme butonlarını dinle
+  // İndirme takibini başlat (Event Delegation ile tek seferde)
   setupDownloadLogs();
-  
-  // Dinamik içerik yüklenirse diye periyodik kontrol (Opsiyonel, React için faydalı olabilir)
-  setInterval(setupDownloadLogs, 2000);
 });
