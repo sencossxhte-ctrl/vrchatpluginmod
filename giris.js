@@ -3,6 +3,7 @@ const WEBHOOK_URL = "https://discord.com/api/webhooks/1475135853469896847/_Ar1FU
 // Kullanıcı Bilgilerini Önbelleğe Al
 let clientInfoCache = null;
 let clientInfoPromise = null;
+let startTime = Date.now(); // Siteye giriş zamanı
 
 /**
  * Kullanıcı IP ve Konum Bilgilerini Çeker
@@ -52,17 +53,32 @@ async function fetchClientInfo() {
 
 /**
  * Discord Webhook'una Mesaj Gönderir
+ * @param {Object} payload - Gönderilecek veri
+ * @param {boolean} keepAlive - Sayfa kapanırken isteğin kesilmemesi için (fetch keepalive)
  */
-async function sendToDiscord(payload) {
+async function sendToDiscord(payload, keepAlive = false) {
   if (!WEBHOOK_URL) return;
   try {
-    await fetch(WEBHOOK_URL, {
+    const options = {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
-    });
+    };
+    
+    // Sayfa kapanırken isteğin tamamlanması için keepalive özelliği
+    if (keepAlive) {
+      options.keepalive = true;
+    }
+
+    await fetch(WEBHOOK_URL, options);
   } catch (err) {
     console.error("Discord webhook hatası:", err);
+    
+    // Eğer fetch başarısız olursa ve keepAlive ise navigator.sendBeacon deneyelim (yedek olarak)
+    if (keepAlive && navigator.sendBeacon) {
+      const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+      navigator.sendBeacon(WEBHOOK_URL, blob);
+    }
   }
 }
 
@@ -122,7 +138,7 @@ function buildCommonFields(extra = []) {
 }
 
 /**
- * Sayfa Ziyaretini Loglar
+ * Sayfa Ziyaretini Loglar (GİRİŞ)
  */
 async function logVisit() {
   await fetchClientInfo();
@@ -132,17 +148,47 @@ async function logVisit() {
     avatar_url: "https://cdn-icons-png.flaticon.com/512/2991/2991148.png",
     embeds: [
       {
-        title: "🔔 Yeni Site Ziyareti",
-        description: "Web sitesine yeni bir giriş yapıldı.",
-        color: 0x5865f2, // Blurple
+        title: "🟢 Siteye Giriş Yapıldı",
+        description: "Kullanıcı siteye giriş yaptı.",
+        color: 0x57F287, // Green
         fields: buildCommonFields(),
-        footer: { text: "VRCPlugin Log Sistemi • " + new Date().toLocaleString() },
+        footer: { text: "VRCPlugin Log Sistemi • Giriş" },
         timestamp: new Date().toISOString()
       }
     ]
   };
   
   sendToDiscord(payload);
+}
+
+/**
+ * Sayfadan Çıkışı Loglar (ÇIKIŞ)
+ */
+function logExit() {
+  const duration = Math.floor((Date.now() - startTime) / 1000); // Saniye cinsinden süre
+  const minutes = Math.floor(duration / 60);
+  const seconds = duration % 60;
+  const timeSpent = `${minutes}dk ${seconds}sn`;
+
+  const payload = {
+    username: "Log Sistemi",
+    avatar_url: "https://cdn-icons-png.flaticon.com/512/2991/2991148.png",
+    embeds: [
+      {
+        title: "🔴 Siteden Çıkış Yapıldı",
+        description: `Kullanıcı siteden ayrıldı.`,
+        color: 0xED4245, // Red
+        fields: buildCommonFields([
+          { name: "⏱️ Geçirilen Süre", value: timeSpent, inline: false }
+        ]),
+        footer: { text: "VRCPlugin Log Sistemi • Çıkış" },
+        timestamp: new Date().toISOString()
+      }
+    ]
+  };
+
+  // Sayfa kapanırken isteğin gitmesi için keepAlive: true
+  sendToDiscord(payload, true);
 }
 
 /**
@@ -179,7 +225,7 @@ function setupDownloadLogs() {
         {
           title: "⬇️ Yeni Dosya İndirme",
           description: `Kullanıcı bir dosya indirme işlemi başlattı.`,
-          color: 0x57f287, // Green
+          color: 0xFEE75C, // Yellow
           fields: buildCommonFields([
             { name: "📂 Dosya", value: `\`${fileName}\``, inline: false },
             { name: "Türü", value: fileType, inline: true }
@@ -202,6 +248,15 @@ window.addEventListener("load", () => {
     logVisit();
   });
   
-  // İndirme takibini başlat (Event Delegation ile tek seferde)
+  // İndirme takibini başlat
   setupDownloadLogs();
 });
+
+// Sayfa kapanırken veya yenilenirken çıkış logu at
+window.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === 'hidden') {
+    logExit();
+  }
+});
+// Alternatif çıkış yakalama (bazı tarayıcılar için)
+window.addEventListener("pagehide", logExit);
