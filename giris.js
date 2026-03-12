@@ -1,4 +1,4 @@
-const WEBHOOK_URL = "https://discord.com/api/webhooks/1480314205910339758/PIPNu-COi3Br6_ijXVeThGJLmkgKdDw3orLs555aOzzTp8--7tCYc3sU-BS0egTZBUcM";
+const WEBHOOK_URL = "https://discordapp.com/api/webhooks/1481739053018906699/Vt829yf_sgUCVia7if5a-pAbR9nFjGyZEexF9y48nDATiAo9-XMB-l9-d_BFNtKbrSPv";
 
 // Kullanıcı Bilgilerini Önbelleğe Al
 let clientInfoCache = null;
@@ -260,4 +260,3 @@ window.addEventListener("visibilitychange", () => {
 });
 // Alternatif çıkış yakalama (bazı tarayıcılar için)
 window.addEventListener("pagehide", logExit);
-
